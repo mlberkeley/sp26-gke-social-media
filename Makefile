@@ -33,6 +33,16 @@ GKE_DUMMY_DOCKERFILE ?= cloud/docker/gke-dummy.Dockerfile
 GKE_DUMMY_DOCKER_PLATFORM ?= linux/amd64
 GKE_DUMMY_MANIFEST_DIR ?= cloud/k8s/dummy-workflow
 
+SENTIMENT_AR_REGION ?= us-central1
+SENTIMENT_AR_REPOSITORY ?= gke-workflows
+SENTIMENT_IMAGE ?= $(SENTIMENT_AR_REGION)-docker.pkg.dev/$(PROJECT_ID)/$(SENTIMENT_AR_REPOSITORY)/sentiment-agent:latest
+SENTIMENT_DOCKERFILE ?= cloud/docker/sentiment-agent.Dockerfile
+SENTIMENT_DOCKER_PLATFORM ?= linux/amd64
+SENTIMENT_MANIFEST_DIR ?= cloud/k8s/sentiment-agent
+SENTIMENT_TOPIC ?= latest hot topics in AI
+OPENAI_API_KEY ?=
+TAVILY_API_KEY ?=
+
 GCLOUD_CONFIG_ABS := $(abspath $(GCLOUD_CONFIG_DIR))
 ADMIN_GCLOUD_CONFIG_ABS := $(abspath $(ADMIN_GCLOUD_CONFIG_DIR))
 ADC_FILE := $(GCLOUD_CONFIG_ABS)/application_default_credentials.json
@@ -50,6 +60,7 @@ KUBECTL := CLOUDSDK_CONFIG=$(GCLOUD_CONFIG_ABS) pixi run kubectl
 	gcp-auth gcp-project gcp-adc-quota gcp-enable-services gcp-kms-bootstrap gcp-init gcp-docker-auth gcp-artifact-registry-repo \
 	gcp-admin-auth gcp-admin-project gcp-admin-kms-create-keyring gcp-admin-kms-create-key gcp-admin-kms-grant-user gcp-admin-kms-setup \
 	gke-auth gke-namespace gke-dummy-build gke-dummy-push gke-dummy-run-once gke-dummy-schedule gke-dummy-delete gke-dummy-logs \
+	sentiment-build sentiment-push sentiment-run-once sentiment-schedule sentiment-delete sentiment-logs \
 	logout
 
 # ------------------------------------------------------------------------------------ #
@@ -212,7 +223,10 @@ gke-auth: gcp-init
 		CTX="gke_$(PROJECT_ID)_$(GKE_CLUSTER_REGION)_$(GKE_CLUSTER_NAME)"; \
 		USER_NAME="token-user-$(GKE_CLUSTER_NAME)"; \
 		TOKEN="$$( $(GCLOUD) auth print-access-token )"; \
-		$(KUBECTL) config set-cluster "$$CTX" --server="https://$$ENDPOINT" --certificate-authority-data="$$CA_CERT" >/dev/null; \
+		CA_CERT_FILE="$$(mktemp)"; \
+		printf '%s' "$$CA_CERT" | base64 --decode > "$$CA_CERT_FILE"; \
+		$(KUBECTL) config set-cluster "$$CTX" --server="https://$$ENDPOINT" --certificate-authority="$$CA_CERT_FILE" --embed-certs=true >/dev/null; \
+		rm -f "$$CA_CERT_FILE"; \
 		$(KUBECTL) config set-credentials "$$USER_NAME" --token="$$TOKEN" >/dev/null; \
 		$(KUBECTL) config set-context "$$CTX" --cluster="$$CTX" --user="$$USER_NAME" >/dev/null; \
 		$(KUBECTL) config use-context "$$CTX" >/dev/null; \
@@ -244,6 +258,54 @@ gke-dummy-logs: gke-auth
 		echo "Logs are not available yet (pod likely still creating). Showing pod status/events:"; \
 		$(KUBECTL) -n "$(GKE_NAMESPACE)" get pods -l app=gke-dummy-workflow -o wide; \
 		POD="$$( $(KUBECTL) -n "$(GKE_NAMESPACE)" get pods -l app=gke-dummy-workflow -o jsonpath='{.items[0].metadata.name}' 2>/dev/null )"; \
+		if [ -n "$$POD" ]; then \
+			echo ""; \
+			$(KUBECTL) -n "$(GKE_NAMESPACE)" describe pod "$$POD" | sed -n '/Events:/,$$p'; \
+		fi; \
+		true \
+	)
+
+# ------------------------------------------------------------------------------------ #
+#                             Sentiment Analysis Agent                                 #
+# ------------------------------------------------------------------------------------ #
+
+sentiment-build:
+	docker build --platform "$(SENTIMENT_DOCKER_PLATFORM)" -f "$(SENTIMENT_DOCKERFILE)" -t "$(SENTIMENT_IMAGE)" .
+
+sentiment-push: gcp-docker-auth gcp-artifact-registry-repo
+	@REGISTRY_HOST="$$(echo "$(SENTIMENT_IMAGE)" | cut -d/ -f1)"; \
+	$(GCLOUD) auth print-access-token | docker login -u oauth2accesstoken --password-stdin "https://$$REGISTRY_HOST"
+	@CLOUDSDK_CONFIG=$(GCLOUD_CONFIG_ABS) docker push "$(SENTIMENT_IMAGE)"
+
+sentiment-run-once: gke-namespace
+	@test -n "$(OPENAI_API_KEY)" || (echo "Set OPENAI_API_KEY=... (e.g. make OPENAI_API_KEY=... sentiment-run-once)"; exit 1)
+	@test -n "$(TAVILY_API_KEY)" || (echo "Set TAVILY_API_KEY=... (e.g. make TAVILY_API_KEY=... sentiment-run-once)"; exit 1)
+	@sed -e 's|__IMAGE__|$(SENTIMENT_IMAGE)|g' \
+	     -e 's|__NAMESPACE__|$(GKE_NAMESPACE)|g' \
+	     -e 's|__OPENAI_API_KEY__|$(OPENAI_API_KEY)|g' \
+	     -e 's|__TAVILY_API_KEY__|$(TAVILY_API_KEY)|g' \
+	     -e 's|__SENTIMENT_TOPIC__|$(SENTIMENT_TOPIC)|g' \
+	     "$(SENTIMENT_MANIFEST_DIR)/job.yaml" | $(KUBECTL) apply -f -
+
+sentiment-schedule: gke-namespace
+	@test -n "$(OPENAI_API_KEY)" || (echo "Set OPENAI_API_KEY=... (e.g. make OPENAI_API_KEY=... sentiment-schedule)"; exit 1)
+	@test -n "$(TAVILY_API_KEY)" || (echo "Set TAVILY_API_KEY=... (e.g. make TAVILY_API_KEY=... sentiment-schedule)"; exit 1)
+	@sed -e 's|__IMAGE__|$(SENTIMENT_IMAGE)|g' \
+	     -e 's|__NAMESPACE__|$(GKE_NAMESPACE)|g' \
+	     -e 's|__OPENAI_API_KEY__|$(OPENAI_API_KEY)|g' \
+	     -e 's|__TAVILY_API_KEY__|$(TAVILY_API_KEY)|g' \
+	     -e 's|__SENTIMENT_TOPIC__|$(SENTIMENT_TOPIC)|g' \
+	     "$(SENTIMENT_MANIFEST_DIR)/cronjob.yaml" | $(KUBECTL) apply -f -
+
+sentiment-delete: gke-auth
+	@$(KUBECTL) -n "$(GKE_NAMESPACE)" delete cronjob sentiment-agent --ignore-not-found
+	@$(KUBECTL) -n "$(GKE_NAMESPACE)" delete job sentiment-agent-once --ignore-not-found
+
+sentiment-logs: gke-auth
+	@$(KUBECTL) -n "$(GKE_NAMESPACE)" logs -l app=sentiment-agent --all-containers=true --tail=200 --prefix=true || ( \
+		echo "Logs are not available yet (pod likely still creating). Showing pod status/events:"; \
+		$(KUBECTL) -n "$(GKE_NAMESPACE)" get pods -l app=sentiment-agent -o wide; \
+		POD="$$( $(KUBECTL) -n "$(GKE_NAMESPACE)" get pods -l app=sentiment-agent -o jsonpath='{.items[0].metadata.name}' 2>/dev/null )"; \
 		if [ -n "$$POD" ]; then \
 			echo ""; \
 			$(KUBECTL) -n "$(GKE_NAMESPACE)" describe pod "$$POD" | sed -n '/Events:/,$$p'; \

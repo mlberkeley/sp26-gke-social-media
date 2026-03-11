@@ -13,6 +13,7 @@ geodata-preprocess = "python -m sp26_gke.geodata.cli preprocess"
 
 geodata-plot = "python sp26_gke/plotting/geodata/generate_figures.py"
 gke-dummy-job = "python -m sp26_gke.workflows.gke_dummy_job"
+sentiment-agent = "python -m sp26_gke.workflows.sentiment_agent"
 
 [dependencies]
 python = ">=3.12,<3.14"
@@ -72,6 +73,11 @@ typos = "*"
 pre-commit-install = "pre-commit install"
 pre-commit-run = "pre-commit run -a"
 
+[feature.py_agents.pypi-dependencies]
+langgraph = ">=0.2"
+langchain-openai = ">=0.3"
+tavily-python = ">=0.5"
+
 [feature.infra.dependencies]
 google-cloud-sdk = "*"
 terraform = "*"
@@ -89,6 +95,7 @@ default = { features = [
   "py_dev",
   "py_test",
   "py_lint",
+  "py_agents",
 ] }
 lint = { features = ["py_lint"], no-default-feature = true }
 infra = { features = ["infra"], no-default-feature = true }

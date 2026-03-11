@@ -76,3 +76,17 @@ variable "dummy_secret" {
   sensitive   = true
   default     = ""
 }
+
+variable "openai_api_key" {
+  description = "OpenAI API key for the sentiment analysis agent."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "tavily_api_key" {
+  description = "Tavily API key for web/social media search."
+  type        = string
+  sensitive   = true
+  default     = ""
+}

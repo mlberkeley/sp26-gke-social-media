@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sentiment-agent
+  namespace: __NAMESPACE__
+  labels:
+    app: sentiment-agent
+spec:
+  schedule: "*/30 * * * *"
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 900
+      template:
+        metadata:
+          labels:
+            app: sentiment-agent
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: sentiment-agent
+              image: __IMAGE__
+              imagePullPolicy: Always
+              env:
+                - name: OPENAI_API_KEY
+                  value: "__OPENAI_API_KEY__"
+                - name: TAVILY_API_KEY
+                  value: "__TAVILY_API_KEY__"
+                - name: SENTIMENT_TOPIC
+                  value: "__SENTIMENT_TOPIC__"

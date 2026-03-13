@@ -1,8 +1,8 @@
 """
 Prompt templates for the social media sentiment analysis agent.
 
-Each prompt is a string template with {variable} placeholders
-that get filled in by the LangGraph nodes.
+Each prompt is a string template with {variable} placeholders that get filled in by the
+LangGraph nodes.
 """
 
 from __future__ import annotations

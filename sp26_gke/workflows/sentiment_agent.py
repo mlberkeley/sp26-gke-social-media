@@ -19,7 +19,7 @@ import json
 import os
 import sys
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
@@ -82,7 +82,7 @@ def research_topic(state: AgentState) -> dict[str, Any]:
 
     # Parse the JSON array of queries from the response
     try:
-        raw = query_response.content.strip()
+        raw = str(query_response.content).strip()
         # Handle markdown code fences if present
         if raw.startswith("```"):
             raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
@@ -143,7 +143,7 @@ def analyze_sentiment(state: AgentState) -> dict[str, Any]:
         search_results=state["search_results"],
     )
     response = llm.invoke(prompt)
-    analysis = response.content.strip()
+    analysis = str(response.content).strip()
 
     _log("analysis_completed", analysis_length=len(analysis))
     return {"sentiment_analysis": analysis}
@@ -164,7 +164,7 @@ def generate_report(state: AgentState) -> dict[str, Any]:
         sentiment_analysis=state["sentiment_analysis"],
     )
     response = llm.invoke(prompt)
-    report = response.content.strip()
+    report = str(response.content).strip()
 
     _log("report_generation_completed", report_length=len(report))
     return {"final_report": report}
@@ -193,7 +193,11 @@ def build_graph() -> StateGraph:
 
 
 def run() -> int:
-    """Run the sentiment analysis agent. Returns 0 on success, 1 on error."""
+    """
+    Run the sentiment analysis agent.
+
+    Returns 0 on success, 1 on error.
+    """
     # Load .env file if present (for local runs outside Makefile)
     try:
         from dotenv import load_dotenv
@@ -204,9 +208,7 @@ def run() -> int:
 
     # Validate required env vars
     missing = [
-        var
-        for var in ("OPENAI_API_KEY", "TAVILY_API_KEY")
-        if not os.environ.get(var)
+        var for var in ("OPENAI_API_KEY", "TAVILY_API_KEY") if not os.environ.get(var)
     ]
     if missing:
         _log("agent_error", error=f"Missing env vars: {', '.join(missing)}")
@@ -221,12 +223,11 @@ def run() -> int:
         graph = build_graph()
         app = graph.compile()
 
-        result = app.invoke(
-            {
-                "topic": topic,
-                "timestamp": timestamp,
-            }
-        )
+        initial_state: AgentState = {
+            "topic": topic,
+            "timestamp": timestamp,
+        }
+        result = app.invoke(cast(Any, initial_state))
 
         # Print the final report prominently
         print("\n" + "=" * 80, flush=True)

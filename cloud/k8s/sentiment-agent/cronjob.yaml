@@ -12,7 +12,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
-      ttlSecondsAfterFinished: 900
+      ttlSecondsAfterFinished: 7200
       template:
         metadata:
           labels:
@@ -22,7 +22,7 @@ spec:
           containers:
             - name: sentiment-agent
               image: __IMAGE__
-              imagePullPolicy: Always
+              imagePullPolicy: IfNotPresent
               env:
                 - name: OPENAI_API_KEY
                   value: "__OPENAI_API_KEY__"

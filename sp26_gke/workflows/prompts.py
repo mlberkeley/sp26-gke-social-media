@@ -8,7 +8,8 @@ LangGraph nodes.
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
-# Node 1 — Research: generate targeted search queries
+# Node 1 — research_topic
+# this node uses Tavily to search for data from X
 # ---------------------------------------------------------------------------
 SEARCH_QUERIES_PROMPT = """\
 You are a social media research assistant. Your job is to generate exactly 3 \
@@ -32,7 +33,8 @@ Return ONLY a JSON array of 3 strings, no commentary. Example:
 """
 
 # ---------------------------------------------------------------------------
-# Node 2 — Analyze: extract sentiment from search results
+# Node 2 — analyze_sentiment
+# this node uses llm of choice (currently openAI, see sentiment_agent.py) to analyze raw results from node 1
 # ---------------------------------------------------------------------------
 SENTIMENT_ANALYSIS_PROMPT = """\
 You are an expert social media sentiment analyst. Below are raw search results \
@@ -78,7 +80,8 @@ Return your analysis as structured JSON with these sections:
 """
 
 # ---------------------------------------------------------------------------
-# Node 3 — Report: generate a polished, human-readable sentiment report
+# Node 3 — generate_report
+# this node uses llm of choice (currently openAI, see sentiment_agent.py) to produce structured sentiment report
 # ---------------------------------------------------------------------------
 REPORT_GENERATION_PROMPT = """\
 You are a senior social media intelligence analyst producing a sentiment \

@@ -1,5 +1,5 @@
 """
-LangGraph sentiment analysis agent X.
+LangGraph research agent.
 
 Runs a 3-node Graph API using LangGraph:
   Node 1. research_topic  — uses Tavily to search X

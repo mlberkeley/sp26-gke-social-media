@@ -10,15 +10,15 @@ The agent will be run as a Kubernetes CronJob every 30 minutes, searches for rec
 
 ## Tech Stack
 
-| Layer                | Technology                                                        | Purpose                                                  |
-| -------------------- | ----------------------------------------------------------------- | -------------------------------------------------------- |
-| **Agent Framework**  | [LangGraph](https://langchain-ai.github.io/langgraph/)            | Stateful, graph-based agent orchestration                |
-| **LLM**              | Currently GPT-4o, will switch to Claude Opus when we have credits | Query generation, sentiment analysis, report generation  |
-| **Web Search**       | [Tavily](https://tavily.com/)                                     | Social media and web search API optimized for LLM agents |
-| **Package Manager**  | [Pixi](https://pixi.sh/) (conda-forge + PyPI)                     | Reproducible environments across dev and containers      |
-| **Containerization** | Docker                                                            | Packaging for GKE deployment                             |
-| **Orchestration**    | Kubernetes (GKE)                                                  | CronJob scheduling, pod management                       |
-| **Infrastructure**   | Terraform                                                         | GCP resource provisioning (GKE cluster, VPC, KMS)        |
+| Layer | Technology | Purpose |
+|---|---|---|
+| **Agent Framework** | [LangGraph](https://langchain-ai.github.io/langgraph/) | Stateful, graph-based agent orchestration |
+| **LLM** | Currently GPT-4o, will switch to Claude Opus when we have credits | Query generation, sentiment analysis, report generation |
+| **Web Search** | [Tavily](https://tavily.com/) | Social media and web search API optimized for LLM agents |
+| **Package Manager** | [Pixi](https://pixi.sh/) (conda-forge + PyPI) | Reproducible environments across dev and containers |
+| **Containerization** | Docker | Packaging for GKE deployment |
+| **Orchestration** | Kubernetes (GKE) | CronJob scheduling, pod management |
+| **Infrastructure** | Terraform | GCP resource provisioning (GKE cluster, VPC, KMS) |
 
 ---
 
@@ -75,11 +75,11 @@ class AgentState(TypedDict, total=False):
 
 #### Node Details
 
-| Node                    | Input                                      | Output                             | External Calls                                 |
-| ----------------------- | ------------------------------------------ | ---------------------------------- | ---------------------------------------------- |
-| **`research_topic`**    | `topic`                                    | `search_queries`, `search_results` | OpenAI (query generation), Tavily (3 searches) |
-| **`analyze_sentiment`** | `topic`, `search_results`                  | `sentiment_analysis`               | OpenAI (analysis)                              |
-| **`generate_report`**   | `topic`, `timestamp`, `sentiment_analysis` | `final_report`                     | OpenAI (report writing)                        |
+| Node | Input | Output | External Calls |
+|---|---|---|---|
+| **`research_topic`** | `topic` | `search_queries`, `search_results` | OpenAI (query generation), Tavily (3 searches) |
+| **`analyze_sentiment`** | `topic`, `search_results` | `sentiment_analysis` | OpenAI (analysis) |
+| **`generate_report`** | `topic`, `timestamp`, `sentiment_analysis` | `final_report` | OpenAI (report writing) |
 
 #### Node 1: `research_topic`
 
@@ -93,7 +93,6 @@ class AgentState(TypedDict, total=False):
 #### Node 2: `analyze_sentiment`
 
 Sends all search results to GPT-4o-mini with a detailed analysis prompt. Produces structured JSON output containing:
-
 - Overall sentiment (positive/negative/neutral/mixed) with confidence score
 - Per-post analysis (stance, emotion, intensity 1-5, source)
 - Key themes, contrarian views, and emerging narratives
@@ -101,7 +100,6 @@ Sends all search results to GPT-4o-mini with a detailed analysis prompt. Produce
 #### Node 3: `generate_report`
 
 Takes the structured analysis and generates a polished markdown report with 7 sections:
-
 1. 📊 Executive Summary
 2. 🔥 Key Findings
 3. 📈 Sentiment Breakdown
@@ -161,22 +159,22 @@ flowchart LR
 
 ### Makefile Targets
 
-| Target                    | Description                          |
-| ------------------------- | ------------------------------------ |
-| `make sentiment-build`    | Build Docker image locally           |
-| `make sentiment-push`     | Push image to GCP Artifact Registry  |
-| `make sentiment-run-once` | Deploy as a one-off K8s Job          |
-| `make sentiment-schedule` | Deploy as a CronJob (every 30 min)   |
-| `make sentiment-delete`   | Remove Job and CronJob from cluster  |
-| `make sentiment-logs`     | View pod logs (the sentiment report) |
+| Target | Description |
+|---|---|
+| `make sentiment-build` | Build Docker image locally |
+| `make sentiment-push` | Push image to GCP Artifact Registry |
+| `make sentiment-run-once` | Deploy as a one-off K8s Job |
+| `make sentiment-schedule` | Deploy as a CronJob (every 30 min) |
+| `make sentiment-delete` | Remove Job and CronJob from cluster |
+| `make sentiment-logs` | View pod logs (the sentiment report) |
 
 ### Environment Variables
 
-| Variable          | Required | Description                                             |
-| ----------------- | -------- | ------------------------------------------------------- |
-| `OPENAI_API_KEY`  | Yes      | OpenAI API key                                          |
-| `TAVILY_API_KEY`  | Yes      | Tavily search API key                                   |
-| `SENTIMENT_TOPIC` | No       | Topic to analyze (default: `"latest hot topics in AI"`) |
+| Variable | Required | Description |
+|---|---|---|
+| `OPENAI_API_KEY` | Yes | OpenAI API key |
+| `TAVILY_API_KEY` | Yes | Tavily search API key |
+| `SENTIMENT_TOPIC` | No | Topic to analyze (default: `"latest hot topics in AI"`) |
 
 These can be set in `.env` (auto-loaded by both the Makefile and the Python agent via `python-dotenv`).
 

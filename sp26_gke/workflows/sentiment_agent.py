@@ -1,16 +1,20 @@
 """
-LangGraph sentiment analysis agent for X / social media.
+LangGraph sentiment analysis agent X.
 
-Runs a 3-node pipeline:
-  1. research_topic  — search X/social media via Tavily
-  2. analyze_sentiment — Gemini analyses raw results
-  3. generate_report — Gemini produces a structured sentiment report
+Runs a 3-node Graph API using LangGraph:
+  Node 1. research_topic  — uses Tavily to search X
+  Node 2. analyze_sentiment — LLM analyses raw results
+  Node 3. generate_report — LLM produces a structured sentiment report
+
+Current Notes:
+ - currently using OpenAI but planning to switch to Gemini once we have credits
+ - right now prompt is hard coded (see DEFAULT_TOPIC), will switch to a more usable UI that allows for custom prompts
+ - as of now, topic can be overridden with the SENTIMENT_TOPIC environment variable
+ - currently does not support cronjob
 
 Usage (local):
-  GEMINI_API_KEY=... TAVILY_API_KEY=... pixi run sentiment-agent
-
-The topic defaults to "latest hot topics in AI" but can be overridden
-with the SENTIMENT_TOPIC environment variable.
+  GEMINI_API_KEY=... TAVILY_API_KEY=...
+  pixi run sentiment-agent
 """
 
 from __future__ import annotations

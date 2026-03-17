@@ -1,20 +1,20 @@
 """
-LangGraph research agent.
+Sentiment analysis agent — role-based entry point.
 
-Runs a 3-node Graph API using LangGraph:
-  Node 1. research_topic  — uses Tavily to search X
-  Node 2. analyze_sentiment — LLM analyses raw results
-  Node 3. generate_report — LLM produces a structured sentiment report
+Uses the AGENT_ROLE env var to dispatch to the appropriate module:
+  - "orchestrator" → plans sub-agents, spawns K8s Jobs, reads final report
+  - "researcher"   → searches + analyzes for a specific focus area
+  - "synthesizer"  → merges all researcher results into one report
+  - "standalone"   → runs the original single-agent pipeline (no Redis/K8s)
 
-Current Notes:
- - currently using OpenAI but planning to switch to Gemini once we have credits
- - right now prompt is hard coded (see DEFAULT_TOPIC), will switch to a more usable UI that allows for custom prompts
- - as of now, topic can be overridden with the SENTIMENT_TOPIC environment variable
- - currently does not support cronjob
-
-Usage (local):
-  GEMINI_API_KEY=... TAVILY_API_KEY=...
+Usage:
+  # Local standalone (no Redis needed):
   pixi run sentiment-agent
+
+  # Multi-agent on K8s (set via env vars in Job manifests):
+  AGENT_ROLE=orchestrator ...
+  AGENT_ROLE=researcher ...
+  AGENT_ROLE=synthesizer ...
 """
 
 from __future__ import annotations
@@ -41,6 +41,7 @@ DEFAULT_TOPIC = "latest hot topics in AI"
 OPENAI_MODEL = "gpt-4o-mini"
 TAVILY_MAX_RESULTS_PER_QUERY = 5
 
+
 # ── Structured log helper ────────────────────────────────────────────────
 
 
@@ -66,7 +67,7 @@ class AgentState(TypedDict, total=False):
     error: str
 
 
-# ── Node functions ───────────────────────────────────────────────────────
+# ── Node functions (standalone mode) ─────────────────────────────────────
 
 
 def research_topic(state: AgentState) -> dict[str, Any]:
@@ -134,7 +135,7 @@ def research_topic(state: AgentState) -> dict[str, Any]:
 
 
 def analyze_sentiment(state: AgentState) -> dict[str, Any]:
-    """Use Gemini to deeply analyse sentiment from the search results."""
+    """Deeply analyse sentiment from the search results."""
     _log("analysis_started")
 
     llm = ChatOpenAI(
@@ -154,7 +155,7 @@ def analyze_sentiment(state: AgentState) -> dict[str, Any]:
 
 
 def generate_report(state: AgentState) -> dict[str, Any]:
-    """Use Gemini to produce the final polished sentiment report."""
+    """Produce the final polished sentiment report."""
     _log("report_generation_started")
 
     llm = ChatOpenAI(
@@ -193,24 +194,11 @@ def build_graph() -> StateGraph:
     return graph
 
 
-# ── Entry point ──────────────────────────────────────────────────────────
+# ── Standalone mode ──────────────────────────────────────────────────────
 
 
-def run() -> int:
-    """
-    Run the sentiment analysis agent.
-
-    Returns 0 on success, 1 on error.
-    """
-    # Load .env file if present (for local runs outside Makefile)
-    try:
-        from dotenv import load_dotenv
-
-        load_dotenv()
-    except ImportError:
-        pass
-
-    # Validate required env vars
+def _run_standalone() -> int:
+    """Run the original single-agent pipeline (no Redis, no K8s)."""
     missing = [
         var for var in ("OPENAI_API_KEY", "TAVILY_API_KEY") if not os.environ.get(var)
     ]
@@ -221,7 +209,7 @@ def run() -> int:
     topic = os.environ.get("SENTIMENT_TOPIC", DEFAULT_TOPIC)
     timestamp = _now_iso()
 
-    _log("agent_started", topic=topic, model=OPENAI_MODEL)
+    _log("agent_started", topic=topic, model=OPENAI_MODEL, mode="standalone")
 
     try:
         graph = build_graph()
@@ -249,6 +237,42 @@ def run() -> int:
     except Exception as exc:
         _log("agent_error", error=str(exc))
         return 1
+
+
+# ── Entry point (role dispatcher) ────────────────────────────────────────
+
+
+def run() -> int:
+    """
+    Dispatch to the appropriate agent based on AGENT_ROLE.
+
+    Returns 0 on success, 1 on error.
+    """
+    # Load .env file if present (for local runs outside Makefile)
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+    except ImportError:
+        pass
+
+    role = os.environ.get("AGENT_ROLE", "standalone")
+
+    if role == "orchestrator":
+        from sp26_gke.workflows.orchestrator import run as orchestrator_run
+
+        return orchestrator_run()
+    elif role == "researcher":
+        from sp26_gke.workflows.researcher import run as researcher_run
+
+        return researcher_run()
+    elif role == "synthesizer":
+        from sp26_gke.workflows.synthesizer import run as synthesizer_run
+
+        return synthesizer_run()
+    else:
+        # Default: run the standalone single-agent pipeline
+        return _run_standalone()
 
 
 if __name__ == "__main__":

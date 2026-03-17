@@ -77,6 +77,8 @@ pre-commit-run = "pre-commit run -a"
 langgraph = ">=0.2"
 langchain-openai = ">=0.3"
 tavily-python = ">=0.5"
+redis = ">=5.0"
+kubernetes = ">=31.0"
 
 [feature.infra.dependencies]
 google-cloud-sdk = "*"

@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sentiment-orchestrator
+  namespace: __NAMESPACE__
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sentiment-job-manager
+  namespace: __NAMESPACE__
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sentiment-orchestrator-binding
+  namespace: __NAMESPACE__
+subjects:
+  - kind: ServiceAccount
+    name: sentiment-orchestrator
+    namespace: __NAMESPACE__
+roleRef:
+  kind: Role
+  name: sentiment-job-manager
+  apiGroup: rbac.authorization.k8s.io

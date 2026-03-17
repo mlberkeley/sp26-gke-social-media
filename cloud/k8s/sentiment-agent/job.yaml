@@ -12,16 +12,26 @@ spec:
     metadata:
       labels:
         app: sentiment-agent
+        role: orchestrator
     spec:
+      serviceAccountName: sentiment-orchestrator
       restartPolicy: Never
       containers:
         - name: sentiment-agent
           image: __IMAGE__
           imagePullPolicy: Always
           env:
+            - name: AGENT_ROLE
+              value: "orchestrator"
             - name: OPENAI_API_KEY
               value: "__OPENAI_API_KEY__"
             - name: TAVILY_API_KEY
               value: "__TAVILY_API_KEY__"
             - name: SENTIMENT_TOPIC
               value: "__SENTIMENT_TOPIC__"
+            - name: REDIS_HOST
+              value: "redis-service"
+            - name: SENTIMENT_IMAGE
+              value: "__IMAGE__"
+            - name: K8S_NAMESPACE
+              value: "__NAMESPACE__"

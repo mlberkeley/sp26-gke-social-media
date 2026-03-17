@@ -61,6 +61,7 @@ KUBECTL := CLOUDSDK_CONFIG=$(GCLOUD_CONFIG_ABS) pixi run kubectl
 	gcp-admin-auth gcp-admin-project gcp-admin-kms-create-keyring gcp-admin-kms-create-key gcp-admin-kms-grant-user gcp-admin-kms-setup \
 	gke-auth gke-namespace gke-dummy-build gke-dummy-push gke-dummy-run-once gke-dummy-schedule gke-dummy-delete gke-dummy-logs \
 	sentiment-build sentiment-push sentiment-run-once sentiment-schedule sentiment-delete sentiment-logs \
+	redis-deploy redis-delete sentiment-rbac \
 	logout
 
 # ------------------------------------------------------------------------------------ #
@@ -277,7 +278,20 @@ sentiment-push: gcp-docker-auth gcp-artifact-registry-repo
 	$(GCLOUD) auth print-access-token | docker login -u oauth2accesstoken --password-stdin "https://$$REGISTRY_HOST"
 	@CLOUDSDK_CONFIG=$(GCLOUD_CONFIG_ABS) docker push "$(SENTIMENT_IMAGE)"
 
-sentiment-run-once: gke-namespace
+redis-deploy: gke-namespace
+	@sed -e 's|__NAMESPACE__|$(GKE_NAMESPACE)|g' cloud/k8s/redis/deployment.yaml | $(KUBECTL) apply -f -
+	@sed -e 's|__NAMESPACE__|$(GKE_NAMESPACE)|g' cloud/k8s/redis/service.yaml | $(KUBECTL) apply -f -
+	@echo "Redis deployed. Waiting for pod to be ready..."
+	@$(KUBECTL) -n "$(GKE_NAMESPACE)" rollout status deployment/redis --timeout=60s
+
+redis-delete: gke-auth
+	@$(KUBECTL) -n "$(GKE_NAMESPACE)" delete deployment redis --ignore-not-found
+	@$(KUBECTL) -n "$(GKE_NAMESPACE)" delete service redis-service --ignore-not-found
+
+sentiment-rbac: gke-namespace
+	@sed -e 's|__NAMESPACE__|$(GKE_NAMESPACE)|g' "$(SENTIMENT_MANIFEST_DIR)/rbac.yaml" | $(KUBECTL) apply -f -
+
+sentiment-run-once: gke-namespace sentiment-rbac
 	@test -n "$(OPENAI_API_KEY)" || (echo "Set OPENAI_API_KEY=... (e.g. make OPENAI_API_KEY=... sentiment-run-once)"; exit 1)
 	@test -n "$(TAVILY_API_KEY)" || (echo "Set TAVILY_API_KEY=... (e.g. make TAVILY_API_KEY=... sentiment-run-once)"; exit 1)
 	@sed -e 's|__IMAGE__|$(SENTIMENT_IMAGE)|g' \
@@ -287,7 +301,7 @@ sentiment-run-once: gke-namespace
 	     -e 's|__SENTIMENT_TOPIC__|$(SENTIMENT_TOPIC)|g' \
 	     "$(SENTIMENT_MANIFEST_DIR)/job.yaml" | $(KUBECTL) apply -f -
 
-sentiment-schedule: gke-namespace
+sentiment-schedule: gke-namespace sentiment-rbac
 	@test -n "$(OPENAI_API_KEY)" || (echo "Set OPENAI_API_KEY=... (e.g. make OPENAI_API_KEY=... sentiment-schedule)"; exit 1)
 	@test -n "$(TAVILY_API_KEY)" || (echo "Set TAVILY_API_KEY=... (e.g. make TAVILY_API_KEY=... sentiment-schedule)"; exit 1)
 	@sed -e 's|__IMAGE__|$(SENTIMENT_IMAGE)|g' \
@@ -300,6 +314,8 @@ sentiment-schedule: gke-namespace
 sentiment-delete: gke-auth
 	@$(KUBECTL) -n "$(GKE_NAMESPACE)" delete cronjob sentiment-agent --ignore-not-found
 	@$(KUBECTL) -n "$(GKE_NAMESPACE)" delete job sentiment-agent-once --ignore-not-found
+	@$(KUBECTL) -n "$(GKE_NAMESPACE)" delete jobs -l role=researcher --ignore-not-found
+	@$(KUBECTL) -n "$(GKE_NAMESPACE)" delete jobs -l role=synthesizer --ignore-not-found
 
 sentiment-logs: gke-auth
 	@$(KUBECTL) -n "$(GKE_NAMESPACE)" logs -l app=sentiment-agent --all-containers=true --tail=200 --prefix=true || ( \

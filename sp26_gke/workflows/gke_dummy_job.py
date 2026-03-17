@@ -1,5 +1,5 @@
 
-
+import sys
 
 if __name__ == "__main__":
-    sys.exit(run())
+    sys.exit(0)

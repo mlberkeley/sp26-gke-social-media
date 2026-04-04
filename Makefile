@@ -12,7 +12,7 @@ TF_SECRETS_JSON := $(SECRETS_DIR)/.secrets.auto.tfvars.json
 export
 
 GCLOUD_LOGIN_FLAGS ?=
-PROJECT_ID ?= cogent-nimbus-489503-f6
+PROJECT_ID ?= intrepid-stage-489905-m7
 SOPS_GCP_KMS ?=
 SOPS_AGE_RECIPIENT ?=
 SOPS_KMS_LOCATION ?= global

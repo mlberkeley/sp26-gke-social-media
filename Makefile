@@ -24,7 +24,7 @@ GCP_REQUIRED_SERVICES := compute.googleapis.com container.googleapis.com cloudkm
 KMS_GRANT_MEMBER ?=
 KMS_GRANT_MEMBERS_CSV ?= robin.holzinger@berkeley.edu
 GKE_CLUSTER_NAME ?= social-media-agent
-GKE_CLUSTER_REGION ?= us-central1
+GKE_CLUSTER_REGION ?= us-central1-a
 GKE_NAMESPACE ?= default
 GKE_DUMMY_AR_REGION ?= us-central1
 GKE_DUMMY_AR_REPOSITORY ?= gke-workflows
@@ -314,8 +314,8 @@ sentiment-schedule: gke-namespace sentiment-rbac
 sentiment-delete: gke-auth
 	@$(KUBECTL) -n "$(GKE_NAMESPACE)" delete cronjob sentiment-agent --ignore-not-found
 	@$(KUBECTL) -n "$(GKE_NAMESPACE)" delete job sentiment-agent-once --ignore-not-found
-	@$(KUBECTL) -n "$(GKE_NAMESPACE)" delete jobs -l role=researcher --ignore-not-found
-	@$(KUBECTL) -n "$(GKE_NAMESPACE)" delete jobs -l role=synthesizer --ignore-not-found
+	@$(KUBECTL) -n "$(GKE_NAMESPACE)" delete jobs -l role=worker --ignore-not-found
+	@$(KUBECTL) -n "$(GKE_NAMESPACE)" delete jobs -l role=summarizer --ignore-not-found
 
 sentiment-logs: gke-auth
 	@$(KUBECTL) -n "$(GKE_NAMESPACE)" logs -l app=sentiment-agent --all-containers=true --tail=200 --prefix=true || ( \

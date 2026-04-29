@@ -1,263 +1,312 @@
 """
-Prompt templates for the social media sentiment analysis agent.
+Prompt templates for the judge/worker/summarizer agent system.
 
-Each prompt is a string template with {variable} placeholders that get filled in by the
-LangGraph nodes or agent modules.
+Each prompt is a string template with {{variable}} placeholders.
 """
 
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
-# Orchestrator — plans 2-4 sub-agents dynamically
-# This is the ONLY hardcoded prompt for the orchestrator.
+# Judge — planning phase (uses Tavily results to decide stances)
 # ---------------------------------------------------------------------------
-ORCHESTRATOR_PLANNING_PROMPT = """\
-You are a research planning assistant. Given the topic below, design 2-4 \
-concurrent research sub-agents. Each agent should cover a DIFFERENT angle \
-so that together they provide comprehensive coverage.
+JUDGE_PLANNING_PROMPT = """\
+You are a neutral judge planning a structured debate analysis. You have just \
+performed a preliminary search on the topic below. Using these search results, \
+determine:
+1. How much conversation exists around this topic
+2. Whether the conversation is polarized
+3. What the major axes of disagreement are
+4. How many worker agents to spawn (2-6) and what stance each should defend
 
 **Topic:** {topic}
 
-Possible ways to split work:
-- By **platform**: one agent searches X/Twitter, another Reddit, another news
-- By **viewpoint**: one tracks mainstream opinion, another contrarian views
-- By **sub-topic**: split the topic into related sub-themes
-- By **audience**: industry experts vs general public vs media
-
-For each sub-agent, provide:
-- `focus`: a short label (e.g., "X/Twitter sentiment", "Reddit deep-dive")
-- `platform_hint`: preferred platform to search ("x.com", "reddit.com", \
-  "news", "general"). Used to optimize search queries.
-- `prompt`: specific research instructions for this agent. Be detailed — \
-  tell it exactly what to look for, what angles to explore, and what kind \
-  of posts/discussions to prioritize.
-
-Return ONLY a JSON array, no commentary. Example:
-[
-  {{
-    "focus": "X/Twitter hot takes",
-    "platform_hint": "x.com",
-    "prompt": "Search X/Twitter for the most viral and opinionated posts about ..."
-  }},
-  {{
-    "focus": "Reddit technical discussion",
-    "platform_hint": "reddit.com",
-    "prompt": "Search Reddit for in-depth technical discussions and debates about ..."
-  }}
-]
-"""
-
-# ---------------------------------------------------------------------------
-# Synthesizer — merges results from multiple researchers into one report
-# ---------------------------------------------------------------------------
-SYNTHESIZER_PROMPT = """\
-You are a senior social media intelligence analyst. Multiple research agents \
-have independently gathered and analyzed data about the topic below. Your job \
-is to synthesize their findings into a single, unified sentiment report.
-
-**Topic:** {topic}
-**Timestamp:** {timestamp}
-
-**Research Results from {agent_count} Agents:**
-{all_results}
-
-## Report Requirements
-
-Produce the report in **Markdown** with the following sections. Cross-reference \
-findings across agents, resolve contradictions, and highlight consensus.
-
-### 📊 Executive Summary
-- 2-3 sentence overview of overall sentiment and why it matters
-- Note the breadth of sources (which platforms/angles were covered)
-
-### 🔥 Key Findings
-- 3-5 most important takeaways, synthesized across all agents
-- Flag where agents agreed vs disagreed
-
-### 📈 Sentiment Breakdown
-- Aggregated sentiment distribution across all sources
-- Compare sentiment by platform/angle if notable differences exist
-
-### 💬 Notable Voices & Opinions
-- Highlight 5-7 specific posts or viewpoints from across all agents
-- Include source platform for each
-
-### 🔀 Trending Sub-topics
-- Merged view of what people are discussing
-- Note sub-topics that appeared across multiple agents
-
-### ⚡ Contrarian & Minority Views
-- Dissenting opinions found by any agent
-- Cross-platform contrarian views are especially noteworthy
-
-### 🔮 Outlook & Emerging Narratives
-- Synthesized direction of sentiment
-- Are different platforms showing different trends?
-
-### 📋 Methodology Note
-- Which agents covered which area
-- Total sources analyzed
-
----
-
-Write the report NOW. Be specific, data-driven, and insightful. Avoid filler \
-language. Every sentence should add value. Highlight cross-platform patterns.
-"""
-
-# ---------------------------------------------------------------------------
-# Node 1 — research_topic
-# this node uses Tavily to search for data from X
-# ---------------------------------------------------------------------------
-SEARCH_QUERIES_PROMPT = """\
-You are a social media research assistant. Your job is to generate exactly 3 \
-highly effective web search queries that will surface recent posts, threads, \
-and discussions from X (Twitter) and other social platforms about the topic \
-below.
-
-**Topic:** {topic}
-
-Requirements for the queries:
-1. One query MUST include "site:x.com" or "site:twitter.com" to target X posts.
-2. One query should target broader social media discussion (Reddit, Mastodon, \
-   Bluesky, or news reactions).
-3. One query should focus on sentiment or opinions (include words like \
-   "opinion", "think", "reaction", "feel", "hot take").
-4. All queries should bias toward RECENT content (include "2026" or "today" \
-   or "this week" where natural).
-
-Return ONLY a JSON array of 3 strings, no commentary. Example:
-["query one", "query two", "query three"]
-"""
-
-# ---------------------------------------------------------------------------
-# Node 2 — analyze_sentiment
-# this node uses llm of choice (currently openAI, see sentiment_agent.py) to analyze raw results from node 1
-# ---------------------------------------------------------------------------
-SENTIMENT_ANALYSIS_PROMPT = """\
-You are an expert social media sentiment analyst. Below are raw search results \
-gathered from X (Twitter) and other social platforms about this topic:
-
-**Topic:** {topic}
-
-**Raw search results:**
+**Preliminary search results:**
 {search_results}
 
-Analyze these results deeply. For each distinct viewpoint or post you can \
-identify, extract:
-- The **stance** (positive / negative / neutral / mixed)
-- The **emotional tone** (excited, angry, fearful, hopeful, sarcastic, etc.)
-- The **intensity** (1-5 scale, where 1=mild, 5=extreme)
-- A **brief summary** of what was said
-- The **source** if identifiable (username, platform)
-
-Also identify:
-- **Dominant sentiment** across all posts
-- **Key themes** and **sub-topics** people are discussing
-- **Notable contrarian views** (minority opinions that stand out)
-- **Emerging narratives** (new angles or framings gaining traction)
-
-Return your analysis as structured JSON with these sections:
+Return ONLY valid JSON matching this schema — no commentary:
 {{
-  "overall_sentiment": "positive|negative|neutral|mixed",
-  "confidence": 0.0-1.0,
-  "dominant_emotions": ["emotion1", "emotion2"],
-  "post_analyses": [
+  "conversation_breadth": "narrow | moderate | broad",
+  "is_polarized": true/false,
+  "major_axes": ["axis1", "axis2", ...],
+  "stances": [
     {{
-      "summary": "...",
-      "stance": "...",
-      "emotion": "...",
-      "intensity": 1-5,
-      "source": "..."
+      "stance_id": "positive",
+      "stance_label": "positive",
+      "description": "Defend the view that ..."
+    }},
+    {{
+      "stance_id": "negative",
+      "stance_label": "negative",
+      "description": "Defend the view that ..."
     }}
-  ],
-  "key_themes": ["theme1", "theme2"],
-  "contrarian_views": ["view1", "view2"],
-  "emerging_narratives": ["narrative1", "narrative2"]
+  ]
+}}
+
+Possible stance labels: positive, negative, mixed, skeptical, fringe, or any \
+descriptive label for partisan subgroups or niche positions. Each stance \
+description should be specific enough that a worker agent knows exactly what \
+position to research and defend.
+"""
+
+JUDGE_PLANNING_SEARCH_QUERIES_PROMPT = """\
+You are planning a sentiment debate analysis. Generate exactly 2 search queries \
+to quickly estimate how broad, polarized, and fragmented the public conversation \
+is around this topic. These are for planning only — keep them broad.
+
+**Topic:** {topic}
+
+Return ONLY a JSON array of 2 strings, no commentary.
+["query one", "query two"]
+"""
+
+# ---------------------------------------------------------------------------
+# Judge — interrogation phase
+# ---------------------------------------------------------------------------
+JUDGE_INTERROGATION_PROMPT = """\
+You are a neutral judge interrogating worker agents who have each defended a \
+specific stance on a topic. You have access to all their initial outputs. Your \
+goal is to probe weaknesses, find contradictions, and determine which side has \
+the stronger case on each point of debate.
+
+**Topic:** {topic}
+
+**Worker outputs:**
+{worker_outputs}
+
+**Previous interrogation exchanges (if any):**
+{previous_exchanges}
+
+Generate targeted questions for specific workers. For each question, explain \
+which worker it targets and why you are asking it. Consider:
+- How popular is your stance?
+- What is your strongest point?
+- Worker X said [something], what do you have to say to that?
+- What do you think of [this piece of evidence]?
+- What would most damage your side's argument?
+
+Return ONLY valid JSON — an array of objects:
+[
+  {{
+    "target_worker_id": "stance_id",
+    "question": "Your question here",
+    "reason": "Why you are asking this"
+  }}
+]
+
+Generate 1-3 questions per round. Focus on the most productive lines of inquiry.
+"""
+
+JUDGE_SHOULD_CONTINUE_PROMPT = """\
+You are a neutral judge deciding whether to continue interrogating workers or \
+whether the debate on each axis has reached a clear enough conclusion.
+
+**Topic:** {topic}
+**Round:** {round_number} of max {max_rounds}
+
+**All interrogation exchanges so far:**
+{all_exchanges}
+
+**Worker outputs:**
+{worker_outputs}
+
+For each axis of debate, assess whether there is a clear winner or whether \
+further interrogation would be productive. Return ONLY valid JSON:
+{{
+  "should_continue": true/false,
+  "reason": "Brief explanation of why to continue or stop"
 }}
 """
 
 # ---------------------------------------------------------------------------
-# Node 3 — generate_report
-# this node uses llm of choice (currently openAI, see sentiment_agent.py) to produce structured sentiment report
+# Judge — aggregation phase
 # ---------------------------------------------------------------------------
-REPORT_GENERATION_PROMPT = """\
-You are a senior social media intelligence analyst producing a sentiment \
-report for stakeholders. Using the structured sentiment analysis below, \
-write a comprehensive yet scannable report.
+JUDGE_AGGREGATION_PROMPT = """\
+You are a neutral judge producing the final aggregate analysis. You have the \
+original worker outputs and all interrogation exchanges. Synthesize everything \
+into a structured aggregate.
 
 **Topic:** {topic}
-**Timestamp:** {timestamp}
 
-**Sentiment Analysis Data:**
-{sentiment_analysis}
+**Worker outputs:**
+{worker_outputs}
 
-## Report Requirements
+**Interrogation log:**
+{interrogation_log}
 
-Produce the report in **Markdown** with the following sections. Be specific, \
-cite examples from the data, and use concrete language rather than vague \
-generalizations.
-
-### 📊 Executive Summary
-- 2-3 sentence overview of overall sentiment and why it matters
-- Include the dominant sentiment direction and confidence level
-
-### 🔥 Key Findings
-- Bullet points of the 3-5 most important takeaways
-- Each finding should be actionable or insightful
-
-### 📈 Sentiment Breakdown
-- Distribution of positive/negative/neutral/mixed opinions
-- Average emotional intensity
-- Most common emotions detected
-
-### 💬 Notable Voices & Opinions
-- Highlight 3-5 specific posts or viewpoints that best represent the discourse
-- Include direct quotes or paraphrases where available
-- Note any influential accounts or viral posts
-
-### 🔀 Trending Sub-topics
-- What specific aspects of the main topic are people focusing on?
-- Any unexpected tangents or related discussions?
-
-### ⚡ Contrarian & Minority Views
-- What are the dissenting opinions?
-- Why might these matter despite being in the minority?
-
-### 🔮 Outlook & Emerging Narratives
-- What direction is sentiment heading?
-- Any early signals of shifting opinion?
-- New framings or narratives gaining traction
-
-### 📋 Methodology Note
-- Brief note on data sources (X/Twitter, social media, web) and search scope
-
----
-
-Write the report NOW. Be specific, data-driven, and insightful. Avoid filler \
-language. Every sentence should add value.
+Return ONLY valid JSON matching this schema:
+{{
+  "stances": ["stance1", "stance2", ...],
+  "controversy_level": "low | medium | high",
+  "agreement_matrix": [
+    {{"stance_a": "...", "stance_b": "...", "agrees_on": ["..."], "disagrees_on": ["..."]}}
+  ],
+  "rebuttal_graph": [
+    {{"from_stance": "...", "to_stance": "...", "rebuttal": "...", "strength": "weak | moderate | strong"}}
+  ],
+  "shared_ground": ["points all or most stances agree on"],
+  "fringe_positions": ["positions held by very few"],
+  "conversation_locus_shift": "Has the conversation changed over time? How?",
+  "judge_notes": "Your overall assessment of the debate quality and conclusions"
+}}
 """
 
 # ---------------------------------------------------------------------------
-# Researcher — search query generation (adapted to use focus/platform hints)
+# Worker — research phase
 # ---------------------------------------------------------------------------
-RESEARCHER_SEARCH_QUERIES_PROMPT = """\
-You are a social media research assistant. Your job is to generate exactly 3 \
-highly effective web search queries that will surface recent posts, threads, \
-and discussions about the topic below.
+WORKER_RESEARCH_QUERIES_PROMPT = """\
+You are a research agent assigned to gather evidence for a specific stance on \
+a topic. Generate exactly 3 search queries that will find supporting evidence, \
+counterarguments, community sentiment, and notable voices for your stance.
 
 **Topic:** {topic}
-**Your Focus Area:** {focus}
-**Preferred Platform:** {platform_hint}
+**Your Stance:** {stance_label} — {stance_description}
 
-Requirements for the queries:
-1. At least one query MUST include "site:{platform_hint}" to target that platform.
-2. One query should capture broader discussion beyond the primary platform.
-3. One query should focus on sentiment or opinions (include words like \
-   "opinion", "think", "reaction", "feel", "hot take").
-4. All queries should bias toward RECENT content (include "2026" or "today" \
-   or "this week" where natural).
-5. Queries should be specific to your assigned focus area.
+Requirements:
+1. One query should find supporting evidence for your stance
+2. One query should find counterarguments against your stance
+3. One query should identify communities or audiences that hold your stance
 
-Return ONLY a JSON array of 3 strings, no commentary. Example:
+Return ONLY a JSON array of 3 strings, no commentary.
 ["query one", "query two", "query three"]
+"""
+
+WORKER_RESEARCH_ANALYSIS_PROMPT = """\
+You are a skeptical researcher analyzing search results to build evidence for \
+a specific stance. Extract facts, claims, community patterns, and opposing \
+arguments. Be thorough but honest about the strength of evidence.
+
+**Topic:** {topic}
+**Your Stance:** {stance_label} — {stance_description}
+
+**Search results:**
+{search_results}
+
+Analyze the results and return ONLY valid JSON:
+{{
+  "supporting_evidence": ["evidence1", "evidence2", ...],
+  "counterarguments": ["counter1", "counter2", ...],
+  "community_patterns": ["pattern1", "pattern2", ...],
+  "key_sources": ["source1", "source2", ...],
+  "evidence_strength": "weak | moderate | strong",
+  "raw_claims": [
+    {{
+      "claim": "...",
+      "source": "...",
+      "supports_stance": true/false
+    }}
+  ]
+}}
+"""
+
+# ---------------------------------------------------------------------------
+# Worker — advocate phase
+# ---------------------------------------------------------------------------
+WORKER_ADVOCATE_PROMPT = """\
+You are an advocate building the strongest possible case for your assigned \
+stance. Using the research findings below, construct a persuasive defense. \
+Steelman your position. Organize arguments by strength. Anticipate and \
+preemptively address the strongest counterarguments. Do not claim certainty \
+where evidence is weak.
+
+**Topic:** {topic}
+**Your Stance:** {stance_label} — {stance_description}
+
+**Research findings:**
+{research_findings}
+
+Return ONLY valid JSON matching this schema:
+{{
+  "summary": "2-3 sentence summary of your stance and why it is compelling",
+  "top_claims": [
+    {{
+      "claim": "The specific claim",
+      "supporting_evidence": ["evidence1", "evidence2"],
+      "rebuttals": ["preemptive rebuttal to likely counterarguments"],
+      "confidence": 0.0-1.0,
+      "popularity_estimate": "low | medium | high"
+    }}
+  ],
+  "crossover_positions": ["positions where your stance overlaps with others"],
+  "antagonistic_positions": ["positions directly opposed to your stance"],
+  "fringe_positions": ["unusual or minority sub-positions within your stance"],
+  "consensus_points": ["things even opponents would agree with"],
+  "axes_of_debate": ["the key dimensions along which this debate plays out"],
+  "confidence": 0.0-1.0
+}}
+
+Rank top_claims from strongest to weakest. Include 3-7 claims.
+"""
+
+# ---------------------------------------------------------------------------
+# Worker — interrogation response
+# ---------------------------------------------------------------------------
+WORKER_INTERROGATION_RESPONSE_PROMPT = """\
+You are a worker agent defending the "{stance_label}" stance on a topic. The \
+judge has asked you a question during the interrogation phase. Answer honestly \
+but persuasively. If you cannot defend a point, acknowledge the weakness rather \
+than fabricating evidence.
+
+**Topic:** {topic}
+**Your Stance:** {stance_label}
+**Your Original Output:**
+{worker_output}
+
+**Judge's Question:**
+{question}
+
+Respond with a clear, focused answer. Be specific and reference evidence from \
+your research where possible.
+"""
+
+# ---------------------------------------------------------------------------
+# Summarizer — final report
+# ---------------------------------------------------------------------------
+SUMMARIZER_PROMPT = """\
+You are a senior analyst producing the final sentiment and debate report. You \
+must compress the judge's aggregate output into a polished report. Preserve \
+the actual argumentative structure. Do not invent new claims.
+
+**Topic:** {topic}
+
+**Judge's Aggregate Analysis:**
+{judge_aggregate}
+
+Produce two outputs:
+
+## OUTPUT 1: Structured JSON
+
+Return valid JSON with:
+{{
+  "topic": "{topic}",
+  "degree_of_controversy": "low | medium | high",
+  "positive_positions": ["..."],
+  "negative_positions": ["..."],
+  "crossover_positions": ["..."],
+  "antagonistic_positions": ["..."],
+  "consensus_points": ["..."],
+  "fringe_positions": ["..."],
+  "axes_of_debate": ["..."],
+  "locus_shift": "...",
+  "social_cohesion": "..."
+}}
+
+## OUTPUT 2: Markdown Report
+
+Write a markdown report with these sections (in this order):
+- TOPIC
+- DEGREE OF CONTROVERSY
+- POSITIVE POSITIONS
+- NEGATIVE POSITIONS
+- ANALYSIS
+- POSITIONS THAT HAVE CROSSOVER
+- ANTAGONISTIC POSITIONS
+- RECOGNIZED SOCIAL COHESION
+- HAS THE LOCUS OF CONVERSATION CHANGED OVER TIME?
+- FRINGE POSITIONS
+- CONSENSUS
+- AXES OF DEBATE
+
+Separate the JSON and markdown with the delimiter: ===MARKDOWN===
+
+Be specific, data-driven, and concise. Every sentence should add value.
 """

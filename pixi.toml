@@ -73,6 +73,11 @@ typos = "*"
 pre-commit-install = "pre-commit install"
 pre-commit-run = "pre-commit run -a"
 
+[feature.py_web.dependencies]
+fastapi = "*"
+uvicorn = "*"
+httpx = "*"
+
 [feature.py_agents.pypi-dependencies]
 langgraph = ">=0.2"
 langchain-openai = ">=0.3"
@@ -97,6 +102,7 @@ default = { features = [
   "py_dev",
   "py_test",
   "py_lint",
+  "py_web",
   "py_agents",
 ] }
 lint = { features = ["py_lint"], no-default-feature = true }

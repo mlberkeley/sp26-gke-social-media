@@ -12,7 +12,7 @@ spec:
     metadata:
       labels:
         app: sentiment-agent
-        role: orchestrator
+        role: judge
     spec:
       serviceAccountName: sentiment-orchestrator
       restartPolicy: Never
@@ -22,12 +22,12 @@ spec:
           imagePullPolicy: Always
           env:
             - name: AGENT_ROLE
-              value: "orchestrator"
+              value: "judge"
             - name: OPENAI_API_KEY
               value: "__OPENAI_API_KEY__"
             - name: TAVILY_API_KEY
               value: "__TAVILY_API_KEY__"
-            - name: SENTIMENT_TOPIC
+            - name: TOPIC
               value: "__SENTIMENT_TOPIC__"
             - name: REDIS_HOST
               value: "redis-service"

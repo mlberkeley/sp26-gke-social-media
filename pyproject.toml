@@ -11,7 +11,13 @@ authors = []
 keywords = []
 classifiers = []
 requires-python = ">=3.12, <3.14"
-dependencies = ["langgraph>=0.2", "langchain-openai>=0.3", "tavily-python>=0.5", "redis>=5.0", "kubernetes>=31.0"]
+dependencies = [
+  "langgraph>=0.2",
+  "langchain-openai>=0.3",
+  "tavily-python>=0.5",
+  "redis>=5.0",
+  "kubernetes>=31.0",
+]
 
 [project.urls]
 repository = "https://github.com/robinholzi/sp26-google-gke-social-media"
@@ -48,6 +54,7 @@ no_implicit_optional = true
 plugins = []
 python_version = "3.12"
 warn_unused_ignores = true
+disable_error_code = ["import-untyped"]
 
 [[tool.mypy.overrides]]
 ignore_missing_imports = true
@@ -66,6 +73,8 @@ module = [
   "yaml",
   "tavily",
   "tavily.*",
+  "kubernetes",
+  "kubernetes.*",
 ]
 
 [tool.pytest.ini_options]

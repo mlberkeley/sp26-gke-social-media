@@ -101,3 +101,10 @@ default = { features = [
 ] }
 lint = { features = ["py_lint"], no-default-feature = true }
 infra = { features = ["infra"], no-default-feature = true }
+frontend = { features = ["frontend"], no-default-feature = true }
+
+[feature.frontend.dependencies]
+nodejs = "*"
+
+[feature.frontend.tasks]
+dev = "npm run dev"
